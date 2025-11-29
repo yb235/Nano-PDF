@@ -50,6 +50,9 @@ debug_*.txt
 temp_page_*.pdf
 edited_*.pdf
 
+# Allow assets
+!assets/
+
 # Testing
 .pytest_cache/
 .coverage

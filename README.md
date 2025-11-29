@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/Nano PDF.png" alt="Nano PDF Logo" width="300"/>
+</p>
+
 # Nano PDF Editor
 
 [![PyPI version](https://badge.fury.io/py/nano-pdf.svg)](https://badge.fury.io/py/nano-pdf)
@@ -13,7 +17,7 @@ A CLI tool to edit PDF slides using natural language prompts, powered by Google'
 
 ## How It Works
 
-Nano PDF combines uses Gemini 3 Pro Image (aka Nano Banana) and PDF manipulation to enable quick edits of PDFs with natural language editing:
+Nano PDF uses Gemini 3 Pro Image (aka Nano Banana) and PDF manipulation to enable quick edits of PDFs with natural language editing:
 
 1. **Page Rendering**: Converts target PDF pages to images using Poppler
 2. **Style References**: Optionally includes style reference pages with generation request to understand visual style (fonts, colors, layout)
@@ -56,7 +60,10 @@ nano-pdf edit my_deck.pdf 2 "Change the title to 'Q3 Results'"
 Edit multiple pages in one go:
 
 ```bash
-nano-pdf edit my_deck.pdf 1 "Update date to Oct 2025" 5 "Add company logo" 10 "Fix typo in footer"
+nano-pdf edit my_deck.pdf \
+  1 "Update date to Oct 2025" \
+  5 "Add company logo" \
+  10 "Fix typo in footer"
 ```
 
 ### Options
@@ -70,7 +77,9 @@ nano-pdf edit my_deck.pdf 1 "Update date to Oct 2025" 5 "Add company logo" 10 "F
 ### Fixing Presentation Errors
 ```bash
 # Fix typos across multiple slides
-nano-pdf edit pitch_deck.pdf 3 "Fix the typo 'recieve' to 'receive'" 7 "Change 'Q4 2024' to 'Q1 2025'"
+nano-pdf edit pitch_deck.pdf \
+  3 "Fix the typo 'recieve' to 'receive'" \
+  7 "Change 'Q4 2024' to 'Q1 2025'"
 ```
 
 ### Visual Design Changes
@@ -89,8 +98,10 @@ nano-pdf edit report.pdf 12 "Update the revenue chart to show Q3 at $2.5M instea
 ### Batch Processing with Context
 ```bash
 # Use full document context for consistency
-nano-pdf edit presentation.pdf 5 "Update the chart colors to match the theme" \
-  8 "Add the company logo in the bottom right" --use-context
+nano-pdf edit presentation.pdf \
+  5 "Update the chart colors to match the theme" \
+  8 "Add the company logo in the bottom right" \
+  --use-context
 ```
 
 ## Requirements
