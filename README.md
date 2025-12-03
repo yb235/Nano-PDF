@@ -52,35 +52,10 @@ The tool processes multiple pages in parallel for speed, with configurable resol
 pip install nano-pdf
 ```
 
-### Using uv (Recommended)
+### Using uvx
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
-
-1. Install `uv` (if not already installed):
 ```bash
-# macOS and Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-2. Clone the repository and sync dependencies:
-```bash
-git clone https://github.com/gavrielc/Nano-PDF.git
-cd Nano-PDF
-uv sync
-```
-
-3. Run the tool using `uv run`:
-```bash
-uv run nano-pdf edit my_deck.pdf 2 "Your edit here"
-```
-
-Or activate the virtual environment and use `nano-pdf` directly:
-```bash
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-nano-pdf edit my_deck.pdf 2 "Your edit here"
+uvx nano-pdf edit my_deck.pdf 2 "Your edit here"
 ```
 
 ## Configuration
@@ -89,23 +64,10 @@ You need a **paid** Google Gemini API key with billing enabled. Free tier keys d
 
 1. Get an API key from [Google AI Studio](https://aistudio.google.com/api-keys)
 2. Enable billing on your Google Cloud project
-3. Set it as an environment variable using one of these methods:
-
-**Option 1: Using a `.env` file (Recommended for development)**
-```bash
-# Copy the example file
-cp .env.example .env
-
-# Edit .env and add your API key
-# GEMINI_API_KEY=your_api_key_here
-```
-
-**Option 2: Export as environment variable**
+3. Set your API key as an environment variable:
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
 ```
-
-The tool automatically loads environment variables from a `.env` file if present (using `python-dotenv`).
 
 **Note:** This tool uses Gemini 3 Pro Image which requires a paid API tier. See [pricing](https://ai.google.dev/pricing) for details.
 
@@ -244,34 +206,19 @@ The tool uses Tesseract OCR to restore searchable text. For best results, ensure
 
 ## Running from Source
 
-If you want to run the latest development version:
-
-### Using uv (Recommended)
-
 ```bash
-# Clone the repository
-git clone https://github.com/gavrielc/Nano-PDF.git
-cd Nano-PDF
-
-# Sync dependencies (creates virtual environment automatically)
-uv sync
-
-# Run the tool
-uv run nano-pdf edit my_deck.pdf 2 "Your edit here"
-```
-
-### Using pip
-
-```bash
-# Clone the repository
 git clone https://github.com/gavrielc/Nano-PDF.git
 cd Nano-PDF
 
 # Install dependencies
-pip install -e .
+uv sync    # or: pip install -e .
+
+# Set up your API key
+cp .env.example .env
+# Edit .env with your GEMINI_API_KEY
 
 # Run the tool
-nano-pdf edit my_deck.pdf 2 "Your edit here"
+uv run nano-pdf edit my_deck.pdf 2 "Your edit here"
 ```
 
 ## License
