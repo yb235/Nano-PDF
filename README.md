@@ -15,6 +15,7 @@ A CLI tool to edit PDF slides using natural language prompts, powered by Google'
 *   **Add New Slides**: Generate entirely new slides that match your deck's visual style.
 *   **Non-Destructive**: Preserves the searchable text layer of your PDF using OCR re-hydration.
 *   **Multi-page & Parallel**: Edit multiple pages in a single command with concurrent processing.
+*   **PDF ➜ PPT Export**: Convert full decks into editable PPTX files, keeping fonts, layout, and reviving charts as live objects with Gemini.
 
 ## Example
 
@@ -156,6 +157,28 @@ nano-pdf edit deck.pdf 5 "Update the market share data to latest figures"
 # Disable Google Search if you want the model to only use provided context
 nano-pdf add deck.pdf 3 "Add a summary slide" --disable-google-search
 ```
+
+### PDF to PPT Conversion
+Turn any PDF slide deck into an editable PowerPoint (PPTX) while keeping typography, layout, and even breathing life back into charts.
+
+```bash
+# Convert a PDF and let Nano Banana rebuild big charts automatically
+nano-pdf convert quarterly_review.pdf --graph-mode auto
+
+# Force AI-driven chart extraction on specific slides
+nano-pdf convert investor.pdf --ai-chart-pages "2,5-6" --graph-mode ai
+```
+
+Options:
+
+* `--graph-mode`:  
+  * `image` – embed page graphics as-is (fastest, no Gemini usage)  
+  * `auto` – default; heuristically rebuild chart images as live PPT charts with Gemini  
+  * `ai` – force Gemini chart extraction for every large image block
+* `--ai-chart-pages`: comma / range list (e.g. `2,5-7`) that tells Nano PDF exactly which pages must have AI-regenerated charts. Handy when you only want to spend tokens on a handful of slides.
+* `--resolution`: controls the page snapshot size sent to Gemini when decoding charts. Use `4K` for best fidelity.
+
+> Gemini access: Graph rebuilding uses `GEMINI_API_KEY`. Run in `--graph-mode image` if you prefer zero AI calls.
 
 ## Requirements
 *   Python 3.10+

@@ -1,11 +1,29 @@
 import typer
 from typing import List, Optional
 from pathlib import Path
-from nano_pdf import pdf_utils, ai_utils
+from nano_pdf import pdf_utils, ai_utils, ppt_converter
 import concurrent.futures
 import tempfile
 
 app = typer.Typer()
+
+
+def _parse_page_selection(expression: str) -> set[int]:
+    pages: set[int] = set()
+    for token in expression.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        if '-' in token:
+            start_str, end_str = token.split('-', 1)
+            start = int(start_str)
+            end = int(end_str)
+            if start > end:
+                start, end = end, start
+            pages.update(range(start, end + 1))
+        else:
+            pages.add(int(token))
+    return pages
 
 @app.command()
 def edit(
@@ -277,6 +295,73 @@ def version():
     Show version.
     """
     typer.echo("Nano PDF v0.2.1")
+
+
+@app.command()
+def convert(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file"),
+    output: Optional[str] = typer.Option(None, help="Output PPTX path. Defaults to '<filename>.pptx'"),
+    graph_mode: ppt_converter.GraphStrategy = typer.Option(
+        ppt_converter.GraphStrategy.AUTO,
+        case_sensitive=False,
+        help="How to rebuild charts: 'image' (embed bitmap), 'auto' (heuristic AI), 'ai' (force AI for all large images)."
+    ),
+    ai_chart_pages: Optional[str] = typer.Option(
+        None,
+        help="Comma-separated list of pages (or ranges like '2-4') whose charts should ALWAYS be rebuilt with AI."
+    ),
+    resolution: str = typer.Option(
+        "4K",
+        help="Image resolution sent to Gemini when analyzing charts."
+    ),
+    disable_google_search: bool = typer.Option(
+        False,
+        help="Disable Gemini's Google Search tool when it reverse-engineers chart data."
+    ),
+):
+    """
+    Convert a PDF slide deck into a PowerPoint while preserving layout, fonts, and charts.
+    """
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+
+    if not output:
+        output = input_path.with_suffix(".pptx").name
+
+    selected_pages: set[int] = set()
+    if ai_chart_pages:
+        try:
+            selected_pages = _parse_page_selection(ai_chart_pages)
+        except ValueError:
+            typer.echo("Error: Invalid --ai-chart-pages format. Use numbers or ranges separated by commas.")
+            raise typer.Exit(code=1)
+
+    typer.echo(
+        f"Converting {input_path} to {output} "
+        f"(graph mode={graph_mode.value}, AI chart pages={sorted(selected_pages) if selected_pages else 'auto'})..."
+    )
+
+    converter = ppt_converter.PdfToPptConverter(
+        graph_strategy=graph_mode,
+        ai_chart_pages=selected_pages if selected_pages else None,
+        ai_resolution=resolution,
+        enable_google_search=not disable_google_search,
+    )
+
+    try:
+        converter.convert(str(input_path), output)
+    except Exception as exc:
+        typer.echo(f"Error converting PDF: {exc}")
+        raise typer.Exit(code=1)
+
+    if converter.diagnostics:
+        typer.echo("\nDiagnostics:")
+        for note in converter.diagnostics:
+            typer.echo(f"- {note}")
+
+    typer.echo(f"Done! Saved PPTX to {output}")
 
 if __name__ == "__main__":
     app()
