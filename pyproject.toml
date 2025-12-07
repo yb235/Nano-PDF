@@ -15,6 +15,9 @@ authors = [
 keywords = [
     "pdf",
     "pdf-editor",
+    "pdf-to-ppt",
+    "pdf-to-powerpoint",
+    "ppt-converter",
     "gemini",
     "ai",
     "computer-vision",
@@ -22,7 +25,9 @@ keywords = [
     "cli",
     "slides",
     "presentation",
-    "ocr"
+    "ocr",
+    "powerpoint",
+    "pptx"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -46,7 +51,8 @@ dependencies = [
     "pytesseract",
     "google-genai>=1.52.0",
     "python-dotenv",
-    "Pillow"
+    "Pillow",
+    "python-pptx>=0.6.21"
 ]
 
 [project.urls]
