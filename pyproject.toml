@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-pdf"
-version = "0.2.1"
+version = "0.3.0"
 description = "A CLI tool to edit PDF slides using natural language prompts, powered by Gemini 3 Pro Image"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,7 +46,9 @@ dependencies = [
     "pytesseract",
     "google-genai>=1.52.0",
     "python-dotenv",
-    "Pillow"
+    "Pillow",
+    "PyMuPDF",
+    "python-pptx"
 ]
 
 [project.urls]

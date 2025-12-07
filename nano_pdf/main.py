@@ -1,7 +1,7 @@
 import typer
 from typing import List, Optional
 from pathlib import Path
-from nano_pdf import pdf_utils, ai_utils
+from nano_pdf import pdf_utils, ai_utils, ppt_converter
 import concurrent.futures
 import tempfile
 
@@ -276,7 +276,134 @@ def version():
     """
     Show version.
     """
-    typer.echo("Nano PDF v0.2.1")
+    typer.echo("Nano PDF v0.3.0")
+
+
+@app.command()
+def convert(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file"),
+    pages: Optional[str] = typer.Option(None, "--pages", "-p", help="Comma/range list like '1,3-5'. Defaults to all pages."),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output PPTX file. Defaults to '<filename>.pptx'"),
+    use_context: bool = typer.Option(True, help="Use PDF text as context for Nano Banana chart reconstruction"),
+    disable_google_search: bool = typer.Option(False, help="Disable Google Search while extracting live chart data"),
+    skip_ai_charts: bool = typer.Option(False, help="Skip Nano Banana chart reconstruction (charts become static images)"),
+    max_ai_charts: int = typer.Option(3, help="Maximum number of charts to reconstruct per slide"),
+    background_strategy: str = typer.Option("average_color", help="Background strategy: 'average_color', 'image', 'none'"),
+    embed_page_thumbnail: bool = typer.Option(False, help="Add a hidden full-slide thumbnail layer for reference"),
+):
+    """
+    Convert PDF slides into a fully editable PPTX deck using Nano Banana magic.
+    """
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+
+    allowed_backgrounds = {"average_color", "image", "none"}
+    background_strategy = background_strategy.lower()
+    if background_strategy not in allowed_backgrounds:
+        typer.echo(f"Error: background_strategy must be one of {sorted(allowed_backgrounds)}")
+        raise typer.Exit(code=1)
+
+    if max_ai_charts < 1:
+        typer.echo("Warning: max_ai_charts must be at least 1. Using 1.")
+        max_ai_charts = 1
+    if max_ai_charts > 8:
+        typer.echo("Warning: max_ai_charts capped at 8. Using 8.")
+        max_ai_charts = 8
+
+    try:
+        total_pages = pdf_utils.get_page_count(str(input_path))
+    except Exception as exc:
+        typer.echo(f"Error reading PDF: {exc}")
+        raise typer.Exit(code=1)
+
+    page_numbers = _parse_page_selection(pages, total_pages)
+    if not page_numbers:
+        typer.echo("Error: No valid pages to convert.")
+        raise typer.Exit(code=1)
+
+    if not output:
+        output = f"{input_path.stem}.pptx"
+
+    typer.echo(f"Converting {len(page_numbers)} page(s) from {input_path.name} -> {output}")
+    typer.echo(f"Background strategy: {background_strategy}. Nano Banana charts: {'enabled' if not skip_ai_charts else 'disabled'}.")
+
+    full_text = ""
+    if use_context:
+        typer.echo("Extracting document text context for Nano Banana…")
+        try:
+            full_text = pdf_utils.extract_full_text(str(input_path))
+        except Exception as exc:
+            typer.echo(f"Warning: Could not extract text context ({exc}). Continuing without context.")
+            full_text = ""
+
+    chart_state = {"disabled": skip_ai_charts}
+
+    def chart_extractor(image, page_number: int):
+        if chart_state["disabled"]:
+            return []
+        try:
+            return ai_utils.extract_chart_data_from_slide(
+                slide_image=image,
+                page_number=page_number,
+                full_text_context=full_text,
+                max_charts=max_ai_charts,
+                enable_search=not disable_google_search,
+            )
+        except Exception as exc:
+            typer.echo(f"Warning: Nano Banana chart extraction failed ({exc}). Falling back to static charts.")
+            chart_state["disabled"] = True
+            return []
+
+    converter = ppt_converter.PDFToPPTConverter(
+        pdf_path=str(input_path),
+        background_strategy=background_strategy,
+        embed_page_thumbnail=embed_page_thumbnail,
+    )
+
+    try:
+        converter.convert(
+            output_path=str(output),
+            page_numbers=page_numbers,
+            chart_extractor=None if skip_ai_charts else chart_extractor,
+            console=typer.echo,
+        )
+    except Exception as exc:
+        typer.echo(f"Error during PPT conversion: {exc}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Done! Saved PPTX to {output}")
+
+
+def _parse_page_selection(selection: Optional[str], total_pages: int) -> List[int]:
+    if not selection:
+        return list(range(1, total_pages + 1))
+
+    pages = set()
+    tokens = [token.strip() for token in selection.split(",") if token.strip()]
+    for token in tokens:
+        if "-" in token:
+            parts = token.split("-", 1)
+            try:
+                start = int(parts[0])
+                end = int(parts[1])
+            except ValueError:
+                continue
+            if start > end:
+                start, end = end, start
+            for value in range(start, end + 1):
+                if 1 <= value <= total_pages:
+                    pages.add(value)
+        else:
+            try:
+                value = int(token)
+            except ValueError:
+                continue
+            if 1 <= value <= total_pages:
+                pages.add(value)
+
+    return sorted(pages)
 
 if __name__ == "__main__":
     app()
