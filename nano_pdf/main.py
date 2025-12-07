@@ -1,7 +1,7 @@
 import typer
 from typing import List, Optional
 from pathlib import Path
-from nano_pdf import pdf_utils, ai_utils
+from nano_pdf import pdf_utils, ai_utils, ppt_utils
 import concurrent.futures
 import tempfile
 
@@ -270,6 +270,77 @@ def add(
             Path(temp_pdf).unlink()
 
     typer.echo(f"Done! New slide added after page {after_page}. Saved to {output}")
+
+@app.command()
+def convert(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file to convert"),
+    output: Optional[str] = typer.Option(None, help="Output path for the PowerPoint file. Defaults to '<filename>.pptx'"),
+    use_ai: bool = typer.Option(True, help="Use AI analysis for precise structure extraction (recommended)"),
+    use_context: bool = typer.Option(True, help="Include full PDF text as context for better conversion"),
+    resolution: str = typer.Option("high", help="Image resolution for analysis: 'high', 'medium', 'low'")
+):
+    """
+    Convert a PDF presentation to PowerPoint format with exact font, style, and layout preservation.
+    Charts and graphs are recreated as editable PowerPoint charts.
+    
+    Usage: nano-pdf convert deck.pdf --output deck.pptx
+    
+    This command uses Gemini AI to analyze each PDF page and extract:
+    - Text with exact fonts, sizes, colors, and positions
+    - Images and their positions
+    - Charts/graphs with their data (recreated as editable PowerPoint charts)
+    - Layout structure and styling
+    
+    The resulting PowerPoint file will have:
+    - Exact font matching and styling
+    - Editable charts and graphs
+    - Preserved layout and positioning
+    - Searchable text
+    """
+    # Check system dependencies
+    try:
+        pdf_utils.check_system_dependencies()
+    except RuntimeError as e:
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1)
+    
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+    
+    # Determine output path
+    if not output:
+        output = str(input_path.with_suffix('.pptx'))
+    else:
+        output_path = Path(output)
+        if not output_path.suffix.lower() == '.pptx':
+            output = str(output_path.with_suffix('.pptx'))
+    
+    typer.echo(f"🚀 Starting PDF to PowerPoint conversion...")
+    typer.echo(f"   Input:  {pdf_path}")
+    typer.echo(f"   Output: {output}")
+    typer.echo(f"   AI Analysis: {'Enabled' if use_ai else 'Disabled (OCR only)'}")
+    
+    try:
+        result_path = ppt_utils.convert_pdf_to_ppt(
+            pdf_path=str(input_path),
+            output_ppt_path=output,
+            use_ai_analysis=use_ai,
+            use_context=use_context,
+            resolution=resolution
+        )
+        
+        typer.echo(f"\n✅ Conversion complete!")
+        typer.echo(f"   PowerPoint saved to: {result_path}")
+        typer.echo(f"\n💡 Tip: Open the PPTX file in PowerPoint to edit charts and text!")
+        
+    except Exception as e:
+        typer.echo(f"\n❌ Error during conversion: {e}")
+        import traceback
+        typer.echo(f"\nDetailed error:")
+        typer.echo(traceback.format_exc())
+        raise typer.Exit(code=1)
 
 @app.command()
 def version():
