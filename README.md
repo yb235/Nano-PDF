@@ -13,6 +13,8 @@ A CLI tool to edit PDF slides using natural language prompts, powered by Google'
 ## Features
 *   **Natural Language Editing**: "Update the graph to include data from 2025", "Change the chart to a bar graph".
 *   **Add New Slides**: Generate entirely new slides that match your deck's visual style.
+*   **PDF to PowerPoint Conversion**: Convert PDFs to editable PowerPoint presentations with preserved formatting and live charts.
+*   **AI-Powered Chart Extraction**: Automatically detects charts and recreates them as editable PowerPoint objects.
 *   **Non-Destructive**: Preserves the searchable text layer of your PDF using OCR re-hydration.
 *   **Multi-page & Parallel**: Edit multiple pages in a single command with concurrent processing.
 
@@ -70,6 +72,23 @@ export GEMINI_API_KEY="your_api_key_here"
 ```
 
 **Note:** This tool uses Gemini 3 Pro Image which requires a paid API tier. See [pricing](https://ai.google.dev/pricing) for details.
+
+## Quick Start
+
+### Convert PDF to PowerPoint
+```bash
+nano-pdf convert presentation.pdf
+```
+
+### Edit PDF Pages
+```bash
+nano-pdf edit deck.pdf 2 "Change the title to 'Q3 Results'"
+```
+
+### Add New Slides
+```bash
+nano-pdf add deck.pdf 0 "Title slide with 'Q3 2025 Review'"
+```
 
 ## Usage
 
@@ -155,6 +174,91 @@ nano-pdf edit deck.pdf 5 "Update the market share data to latest figures"
 
 # Disable Google Search if you want the model to only use provided context
 nano-pdf add deck.pdf 3 "Add a summary slide" --disable-google-search
+```
+
+## PDF to PowerPoint Conversion
+
+### Overview
+Nano PDF now includes an advanced PDF to PowerPoint converter that uses AI to create high-fidelity conversions with:
+- **Preserved Formatting**: Fonts, colors, sizes, and styles are maintained exactly
+- **Editable Charts**: Automatically detects charts and recreates them as native PowerPoint charts (not images!)
+- **Layout Preservation**: Text boxes, images, and shapes positioned accurately
+- **Smart Analysis**: AI-powered structure detection for optimal conversion
+
+### Basic Conversion
+```bash
+# Convert a PDF to PowerPoint
+nano-pdf convert presentation.pdf
+
+# Specify output filename
+nano-pdf convert presentation.pdf --output my_slides.pptx
+```
+
+### Advanced Options
+```bash
+# Convert with all AI enhancements (default)
+nano-pdf convert deck.pdf --use-ai-enhancement --extract-charts
+
+# Convert without AI (faster, but charts remain as images)
+nano-pdf convert deck.pdf --no-use-ai-enhancement --no-extract-charts
+
+# Quick conversion for simple PDFs
+nano-pdf convert simple.pdf --no-extract-charts
+```
+
+### How It Works
+The PDF to PowerPoint converter uses a sophisticated multi-stage process:
+
+1. **Structure Analysis**: Extracts text, images, shapes, and layout information from each PDF page
+2. **AI Chart Detection**: Uses Gemini to identify and analyze charts/graphs
+3. **Data Extraction**: Extracts chart data (categories, series, values) using AI vision
+4. **PowerPoint Recreation**: Recreates elements as native PowerPoint objects
+5. **Chart Recreation**: Converts detected charts to editable PowerPoint charts
+
+### Chart Conversion Examples
+The converter can handle various chart types:
+- **Bar Charts**: Vertical and horizontal bars
+- **Line Charts**: Single and multi-series
+- **Pie Charts**: With legends and labels
+- **Column Charts**: Grouped and stacked
+- **Area Charts**: Filled line charts
+
+**Important**: Chart data extraction uses AI vision and may require manual verification for critical data. Always review converted charts for accuracy.
+
+### Supported Elements
+The converter handles:
+- ✓ Text with formatting (fonts, sizes, colors, bold, italic)
+- ✓ Images (PNG, JPEG, embedded graphics)
+- ✓ Shapes and vector graphics
+- ✓ Background colors
+- ✓ Tables
+- ✓ Charts and graphs (as editable objects with AI)
+
+### Limitations
+- Complex PDF animations or transitions are not preserved
+- Some specialized fonts may be substituted with similar alternatives
+- 3D charts may be converted to 2D equivalents
+- Chart data extraction accuracy depends on chart clarity and quality
+
+### Tips for Best Results
+1. **High-Quality PDFs**: Use PDFs with clear, readable text and charts
+2. **Standard Fonts**: PDFs using common fonts (Arial, Calibri, Times New Roman) convert best
+3. **Clear Charts**: Charts with visible labels and legends extract more accurately
+4. **Review Output**: Always review converted presentations, especially chart data
+5. **Use AI Enhancement**: Enable AI features for best results with charts and complex layouts
+
+### Example Workflow
+```bash
+# 1. Create a sample PDF (included in the package)
+python3 create_sample_pdf.py
+
+# 2. Convert it to PowerPoint
+nano-pdf convert sample_presentation.pdf --output converted.pptx
+
+# 3. Open the PowerPoint and verify
+# - Charts should be editable (click to see Excel data)
+# - Text should be selectable and editable
+# - Formatting should match the original
 ```
 
 ## Requirements

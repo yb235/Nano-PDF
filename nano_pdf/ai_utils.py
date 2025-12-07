@@ -94,6 +94,248 @@ def generate_edited_slide(
 
     return generated_image, response_text
 
+
+def analyze_chart_image(
+    chart_image: Image.Image,
+    context: str = ""
+) -> dict:
+    """
+    Analyze a chart image to extract chart type, data, and structure
+    Returns dict with chart_type, title, categories, series, and raw data
+    """
+    client = get_client()
+    
+    prompt = f"""Analyze this chart/graph image in detail. Extract:
+
+1. Chart Type: (bar, column, line, pie, scatter, area, etc.)
+2. Chart Title: (if visible)
+3. Axis Labels: X-axis and Y-axis labels
+4. Data: Extract all data points visible in the chart
+5. Categories: List of categories (x-axis values)
+6. Series: Each data series with name and values
+7. Colors: Colors used for each series
+8. Legend: Legend labels if present
+
+{context}
+
+Provide the analysis in JSON format like this:
+{{
+    "chart_type": "bar",
+    "title": "Sales by Quarter",
+    "x_axis_label": "Quarter",
+    "y_axis_label": "Revenue ($M)",
+    "categories": ["Q1", "Q2", "Q3", "Q4"],
+    "series": [
+        {{
+            "name": "2023",
+            "values": [1.2, 1.5, 1.8, 2.1],
+            "color": "#4472C4"
+        }},
+        {{
+            "name": "2024",
+            "values": [1.5, 1.9, 2.3, 2.6],
+            "color": "#ED7D31"
+        }}
+    ]
+}}
+
+Be precise with the data values. If you cannot read exact values, estimate them carefully based on the visual representation."""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.1  # Low temperature for accuracy
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, chart_image],
+            config=config
+        )
+    except Exception as e:
+        raise RuntimeError(f"Chart analysis failed: {e}")
+    
+    # Extract text response
+    response_text = ""
+    if response.candidates and response.candidates[0].content.parts:
+        for part in response.candidates[0].content.parts:
+            if part.text:
+                response_text = part.text
+                break
+    
+    # Parse JSON from response
+    try:
+        # Try to find JSON in the response
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            import json
+            chart_data = json.loads(json_match.group())
+            return chart_data
+        else:
+            # If no JSON found, create a basic structure
+            return {
+                "chart_type": "unknown",
+                "title": "",
+                "categories": [],
+                "series": [],
+                "raw_analysis": response_text
+            }
+    except Exception as e:
+        print(f"Warning: Could not parse chart analysis JSON: {e}")
+        return {
+            "chart_type": "unknown",
+            "title": "",
+            "categories": [],
+            "series": [],
+            "raw_analysis": response_text
+        }
+
+
+def analyze_pdf_page_structure(
+    page_image: Image.Image,
+    extracted_text: str = ""
+) -> dict:
+    """
+    Analyze PDF page structure using AI to identify regions and elements
+    Returns dict with layout analysis
+    """
+    client = get_client()
+    
+    prompt = f"""Analyze this PDF page and identify its structure and layout. Identify:
+
+1. Page Type: (title slide, content slide, chart slide, image slide, mixed, etc.)
+2. Main Title: The main heading/title on the page
+3. Sections: Different content sections and their positions
+4. Text Blocks: Major text blocks and their purpose
+5. Charts/Graphs: Any charts or graphs present
+6. Images: Any images or photos present
+7. Layout Style: Overall layout pattern (centered, two-column, etc.)
+8. Color Scheme: Dominant colors used
+9. Font Styles: Main fonts visible
+
+{f"Extracted Text: {extracted_text[:1000]}" if extracted_text else ""}
+
+Provide analysis in JSON format:
+{{
+    "page_type": "content",
+    "main_title": "Page Title",
+    "layout_style": "two-column",
+    "color_scheme": ["#1F4788", "#FFFFFF"],
+    "sections": [
+        {{
+            "type": "title",
+            "position": "top",
+            "content": "Main Heading"
+        }},
+        {{
+            "type": "text",
+            "position": "left",
+            "content": "Body text..."
+        }}
+    ],
+    "has_charts": true,
+    "has_images": false,
+    "font_family": "Arial"
+}}"""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.1
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, page_image],
+            config=config
+        )
+    except Exception as e:
+        raise RuntimeError(f"Page structure analysis failed: {e}")
+    
+    # Extract and parse response
+    response_text = ""
+    if response.candidates and response.candidates[0].content.parts:
+        for part in response.candidates[0].content.parts:
+            if part.text:
+                response_text = part.text
+                break
+    
+    try:
+        import re
+        import json
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return {"raw_analysis": response_text}
+    except Exception as e:
+        print(f"Warning: Could not parse structure analysis: {e}")
+        return {"raw_analysis": response_text}
+
+
+def enhance_conversion_with_ai(
+    page_image: Image.Image,
+    page_structure: dict,
+    extracted_elements: dict
+) -> dict:
+    """
+    Use AI to enhance PDF to PPT conversion with intelligent suggestions
+    """
+    client = get_client()
+    
+    prompt = f"""You are helping convert a PDF page to PowerPoint. Analyze this page and provide suggestions for optimal conversion:
+
+Current extracted elements:
+- Text elements: {len(extracted_elements.get('text_elements', []))}
+- Images: {len(extracted_elements.get('image_elements', []))}
+- Shapes: {len(extracted_elements.get('shape_elements', []))}
+
+Provide recommendations for:
+1. Layout adjustments needed for PowerPoint
+2. Font substitutions (if PDF fonts are not available in PPT)
+3. Color corrections
+4. Element groupings
+5. Any special handling needed
+
+Return as JSON:
+{{
+    "layout_recommendations": "...",
+    "font_mappings": {{"PDF Font": "PPT Font"}},
+    "groupings": [["element1", "element2"]],
+    "special_handling": ["..."]
+}}"""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.3
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, page_image],
+            config=config
+        )
+        
+        response_text = ""
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    response_text = part.text
+                    break
+        
+        import re
+        import json
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return {}
+    except Exception as e:
+        print(f"Warning: AI enhancement failed: {e}")
+        return {}
+
 def generate_new_slide(
     style_reference_images: List[Image.Image],
     user_prompt: str,
@@ -172,3 +414,245 @@ def generate_new_slide(
         raise RuntimeError("No image generated by the model.")
 
     return generated_image, response_text
+
+
+def analyze_chart_image(
+    chart_image: Image.Image,
+    context: str = ""
+) -> dict:
+    """
+    Analyze a chart image to extract chart type, data, and structure
+    Returns dict with chart_type, title, categories, series, and raw data
+    """
+    client = get_client()
+    
+    prompt = f"""Analyze this chart/graph image in detail. Extract:
+
+1. Chart Type: (bar, column, line, pie, scatter, area, etc.)
+2. Chart Title: (if visible)
+3. Axis Labels: X-axis and Y-axis labels
+4. Data: Extract all data points visible in the chart
+5. Categories: List of categories (x-axis values)
+6. Series: Each data series with name and values
+7. Colors: Colors used for each series
+8. Legend: Legend labels if present
+
+{context}
+
+Provide the analysis in JSON format like this:
+{{
+    "chart_type": "bar",
+    "title": "Sales by Quarter",
+    "x_axis_label": "Quarter",
+    "y_axis_label": "Revenue ($M)",
+    "categories": ["Q1", "Q2", "Q3", "Q4"],
+    "series": [
+        {{
+            "name": "2023",
+            "values": [1.2, 1.5, 1.8, 2.1],
+            "color": "#4472C4"
+        }},
+        {{
+            "name": "2024",
+            "values": [1.5, 1.9, 2.3, 2.6],
+            "color": "#ED7D31"
+        }}
+    ]
+}}
+
+Be precise with the data values. If you cannot read exact values, estimate them carefully based on the visual representation."""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.1  # Low temperature for accuracy
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, chart_image],
+            config=config
+        )
+    except Exception as e:
+        raise RuntimeError(f"Chart analysis failed: {e}")
+    
+    # Extract text response
+    response_text = ""
+    if response.candidates and response.candidates[0].content.parts:
+        for part in response.candidates[0].content.parts:
+            if part.text:
+                response_text = part.text
+                break
+    
+    # Parse JSON from response
+    try:
+        # Try to find JSON in the response
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            import json
+            chart_data = json.loads(json_match.group())
+            return chart_data
+        else:
+            # If no JSON found, create a basic structure
+            return {
+                "chart_type": "unknown",
+                "title": "",
+                "categories": [],
+                "series": [],
+                "raw_analysis": response_text
+            }
+    except Exception as e:
+        print(f"Warning: Could not parse chart analysis JSON: {e}")
+        return {
+            "chart_type": "unknown",
+            "title": "",
+            "categories": [],
+            "series": [],
+            "raw_analysis": response_text
+        }
+
+
+def analyze_pdf_page_structure(
+    page_image: Image.Image,
+    extracted_text: str = ""
+) -> dict:
+    """
+    Analyze PDF page structure using AI to identify regions and elements
+    Returns dict with layout analysis
+    """
+    client = get_client()
+    
+    prompt = f"""Analyze this PDF page and identify its structure and layout. Identify:
+
+1. Page Type: (title slide, content slide, chart slide, image slide, mixed, etc.)
+2. Main Title: The main heading/title on the page
+3. Sections: Different content sections and their positions
+4. Text Blocks: Major text blocks and their purpose
+5. Charts/Graphs: Any charts or graphs present
+6. Images: Any images or photos present
+7. Layout Style: Overall layout pattern (centered, two-column, etc.)
+8. Color Scheme: Dominant colors used
+9. Font Styles: Main fonts visible
+
+{f"Extracted Text: {extracted_text[:1000]}" if extracted_text else ""}
+
+Provide analysis in JSON format:
+{{
+    "page_type": "content",
+    "main_title": "Page Title",
+    "layout_style": "two-column",
+    "color_scheme": ["#1F4788", "#FFFFFF"],
+    "sections": [
+        {{
+            "type": "title",
+            "position": "top",
+            "content": "Main Heading"
+        }},
+        {{
+            "type": "text",
+            "position": "left",
+            "content": "Body text..."
+        }}
+    ],
+    "has_charts": true,
+    "has_images": false,
+    "font_family": "Arial"
+}}"""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.1
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, page_image],
+            config=config
+        )
+    except Exception as e:
+        raise RuntimeError(f"Page structure analysis failed: {e}")
+    
+    # Extract and parse response
+    response_text = ""
+    if response.candidates and response.candidates[0].content.parts:
+        for part in response.candidates[0].content.parts:
+            if part.text:
+                response_text = part.text
+                break
+    
+    try:
+        import re
+        import json
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return {"raw_analysis": response_text}
+    except Exception as e:
+        print(f"Warning: Could not parse structure analysis: {e}")
+        return {"raw_analysis": response_text}
+
+
+def enhance_conversion_with_ai(
+    page_image: Image.Image,
+    page_structure: dict,
+    extracted_elements: dict
+) -> dict:
+    """
+    Use AI to enhance PDF to PPT conversion with intelligent suggestions
+    """
+    client = get_client()
+    
+    prompt = f"""You are helping convert a PDF page to PowerPoint. Analyze this page and provide suggestions for optimal conversion:
+
+Current extracted elements:
+- Text elements: {len(extracted_elements.get('text_elements', []))}
+- Images: {len(extracted_elements.get('image_elements', []))}
+- Shapes: {len(extracted_elements.get('shape_elements', []))}
+
+Provide recommendations for:
+1. Layout adjustments needed for PowerPoint
+2. Font substitutions (if PDF fonts are not available in PPT)
+3. Color corrections
+4. Element groupings
+5. Any special handling needed
+
+Return as JSON:
+{{
+    "layout_recommendations": "...",
+    "font_mappings": {{"PDF Font": "PPT Font"}},
+    "groupings": [["element1", "element2"]],
+    "special_handling": ["..."]
+}}"""
+    
+    config = types.GenerateContentConfig(
+        response_modalities=['TEXT'],
+        temperature=0.3
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, page_image],
+            config=config
+        )
+        
+        response_text = ""
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    response_text = part.text
+                    break
+        
+        import re
+        import json
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return {}
+    except Exception as e:
+        print(f"Warning: AI enhancement failed: {e}")
+        return {}
