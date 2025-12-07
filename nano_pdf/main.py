@@ -272,11 +272,78 @@ def add(
     typer.echo(f"Done! New slide added after page {after_page}. Saved to {output}")
 
 @app.command()
+def convert(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file"),
+    output: Optional[str] = typer.Option(None, help="Output path for the PowerPoint file. Defaults to '<filename>.pptx'"),
+    use_ai_enhancement: bool = typer.Option(True, help="Use AI to enhance conversion (detect charts, analyze layout)"),
+    extract_charts: bool = typer.Option(True, help="Try to extract and recreate charts as editable PowerPoint charts"),
+):
+    """
+    Convert a PDF to PowerPoint presentation with preserved formatting and editable charts.
+    
+    This advanced converter uses AI to:
+    - Preserve fonts, colors, and styles exactly
+    - Extract and recreate charts as editable PowerPoint objects
+    - Maintain layout and positioning
+    - Detect and convert images, shapes, and text
+    
+    Usage: nano-pdf convert presentation.pdf --output output.pptx
+    """
+    from nano_pdf import ppt_converter, ai_utils
+    
+    # Check system dependencies first
+    try:
+        pdf_utils.check_system_dependencies()
+    except RuntimeError as e:
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1)
+    
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+    
+    if not output:
+        output = input_path.stem + ".pptx"
+    
+    typer.echo(f"Converting {pdf_path} to PowerPoint...")
+    typer.echo(f"AI Enhancement: {'Enabled' if use_ai_enhancement else 'Disabled'}")
+    typer.echo(f"Chart Extraction: {'Enabled' if extract_charts else 'Disabled'}")
+    typer.echo("")
+    
+    def progress_callback(message: str):
+        typer.echo(message)
+    
+    try:
+        # Convert PDF to PPTX
+        output_file = ppt_converter.convert_pdf_to_pptx(
+            pdf_path=str(input_path),
+            output_path=output,
+            use_ai=use_ai_enhancement and extract_charts,
+            ai_utils_module=ai_utils if use_ai_enhancement else None,
+            progress_callback=progress_callback
+        )
+        
+        typer.echo("")
+        typer.echo(f"✓ Conversion complete!")
+        typer.echo(f"✓ PowerPoint saved to: {output_file}")
+        typer.echo("")
+        typer.echo("Note: Please review the converted presentation.")
+        typer.echo("Chart data extraction uses AI and may require verification.")
+        
+    except Exception as e:
+        typer.echo(f"Error during conversion: {e}")
+        import traceback
+        typer.echo(traceback.format_exc())
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """
     Show version.
     """
-    typer.echo("Nano PDF v0.2.1")
+    typer.echo("Nano PDF v0.3.0 - Now with PDF to PowerPoint conversion!")
 
 if __name__ == "__main__":
     app()
