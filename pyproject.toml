@@ -46,7 +46,9 @@ dependencies = [
     "pytesseract",
     "google-genai>=1.52.0",
     "python-dotenv",
-    "Pillow"
+    "Pillow",
+    "pymupdf",
+    "python-pptx"
 ]
 
 [project.urls]
