@@ -2,10 +2,20 @@ import typer
 from typing import List, Optional
 from pathlib import Path
 from nano_pdf import pdf_utils, ai_utils
+from nano_pdf.ppt_converter import (
+    PDFToPPTConverter,
+    ConversionOptions,
+    convert_pdf_to_pptx,
+    convert_pdf_to_pptx_with_ai
+)
 import concurrent.futures
 import tempfile
 
-app = typer.Typer()
+app = typer.Typer(
+    name="nano-pdf",
+    help="Nano PDF Editor - Edit PDFs and convert to PowerPoint using AI (Gemini)",
+    add_completion=False
+)
 
 @app.command()
 def edit(
@@ -272,11 +282,328 @@ def add(
     typer.echo(f"Done! New slide added after page {after_page}. Saved to {output}")
 
 @app.command()
+def toppt(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file to convert"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output path for the PPTX file. Defaults to '<filename>.pptx'"),
+    pages: Optional[str] = typer.Option(None, "--pages", "-p", help="Comma-separated page numbers to convert (e.g. '1,2,5-10'). Defaults to all pages."),
+    extract_charts: bool = typer.Option(True, "--extract-charts/--no-extract-charts", help="Extract charts as editable PowerPoint charts (uses AI)"),
+    extract_tables: bool = typer.Option(True, "--extract-tables/--no-extract-tables", help="Extract tables as editable PowerPoint tables"),
+    preserve_fonts: bool = typer.Option(True, "--preserve-fonts/--no-preserve-fonts", help="Attempt to match original fonts"),
+    use_ai: bool = typer.Option(True, "--use-ai/--no-use-ai", help="Use AI for intelligent element extraction"),
+    resolution: str = typer.Option("4K", "--resolution", "-r", help="Image resolution for AI analysis: '4K', '2K', '1K'"),
+    fallback_to_image: bool = typer.Option(True, "--fallback-to-image/--no-fallback-to-image", help="Fall back to image if element extraction fails"),
+    parallel: bool = typer.Option(True, "--parallel/--no-parallel", help="Process pages in parallel for speed"),
+    max_workers: int = typer.Option(5, "--max-workers", help="Maximum parallel workers (1-10)")
+):
+    """
+    Convert PDF to PowerPoint (PPTX) with editable elements.
+    
+    This command converts a PDF presentation to a PowerPoint file, attempting to:
+    - Preserve fonts, colors, and styling exactly
+    - Extract charts as editable PowerPoint charts (with data!)
+    - Extract tables as editable PowerPoint tables
+    - Maintain text as editable text boxes
+    - Keep images in their original positions
+    
+    Uses Nano Banana Pro Magic (Gemini AI) for intelligent chart data extraction
+    and element detection.
+    
+    Examples:
+    
+        # Convert entire PDF to PPT
+        nano-pdf toppt presentation.pdf
+        
+        # Convert specific pages
+        nano-pdf toppt report.pdf --pages "1,3,5-10"
+        
+        # Convert without AI (faster, basic extraction)
+        nano-pdf toppt slides.pdf --no-use-ai
+        
+        # Convert with custom output name
+        nano-pdf toppt deck.pdf -o my_presentation.pptx
+        
+        # High-quality conversion (slower)
+        nano-pdf toppt important.pdf --resolution 4K --extract-charts
+    """
+    # Check system dependencies first
+    try:
+        pdf_utils.check_system_dependencies()
+    except RuntimeError as e:
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1)
+
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+
+    # Set output path
+    if not output:
+        output = str(input_path.with_suffix('.pptx'))
+    
+    # Parse page numbers
+    page_list = None
+    if pages:
+        page_list = _parse_page_range(pages)
+        if not page_list:
+            typer.echo(f"Error: Invalid page specification '{pages}'")
+            raise typer.Exit(code=1)
+        
+        # Validate page numbers
+        total_pages = pdf_utils.get_page_count(str(input_path))
+        invalid = [p for p in page_list if p < 1 or p > total_pages]
+        if invalid:
+            typer.echo(f"Error: Invalid page numbers {invalid}. PDF has {total_pages} pages.")
+            raise typer.Exit(code=1)
+    
+    # Validate max_workers
+    max_workers = max(1, min(10, max_workers))
+    
+    # Create conversion options
+    options = ConversionOptions(
+        extract_charts=extract_charts,
+        extract_tables=extract_tables,
+        preserve_fonts=preserve_fonts,
+        use_ai_extraction=use_ai,
+        resolution=resolution,
+        fallback_to_image=fallback_to_image,
+        parallel_processing=parallel,
+        max_workers=max_workers
+    )
+    
+    # Progress callback
+    def progress_callback(current: int, total: int, message: str):
+        if total > 0:
+            pct = (current / total) * 100
+            typer.echo(f"[{pct:5.1f}%] {message}")
+        else:
+            typer.echo(message)
+    
+    typer.echo(f"\n{'='*60}")
+    typer.echo(f"  Nano PDF to PowerPoint Converter")
+    typer.echo(f"  Powered by Nano Banana Pro Magic (Gemini AI)")
+    typer.echo(f"{'='*60}\n")
+    
+    typer.echo(f"Input:  {pdf_path}")
+    typer.echo(f"Output: {output}")
+    
+    if page_list:
+        typer.echo(f"Pages:  {len(page_list)} selected")
+    else:
+        total = pdf_utils.get_page_count(str(input_path))
+        typer.echo(f"Pages:  All ({total} pages)")
+    
+    typer.echo(f"\nOptions:")
+    typer.echo(f"  - Extract charts: {'Yes (AI)' if extract_charts and use_ai else 'Yes' if extract_charts else 'No'}")
+    typer.echo(f"  - Extract tables: {'Yes' if extract_tables else 'No'}")
+    typer.echo(f"  - Preserve fonts: {'Yes' if preserve_fonts else 'No'}")
+    typer.echo(f"  - AI extraction:  {'Yes' if use_ai else 'No'}")
+    typer.echo(f"  - Resolution:     {resolution}")
+    typer.echo(f"  - Parallel:       {'Yes (' + str(max_workers) + ' workers)' if parallel else 'No'}")
+    typer.echo(f"  - Image fallback: {'Yes' if fallback_to_image else 'No'}")
+    typer.echo()
+    
+    try:
+        converter = PDFToPPTConverter(options)
+        result_path = converter.convert(
+            pdf_path=str(input_path),
+            output_path=output,
+            pages=page_list,
+            progress_callback=progress_callback
+        )
+        
+        typer.echo(f"\n{'='*60}")
+        typer.echo(f"  Conversion Complete!")
+        typer.echo(f"{'='*60}")
+        typer.echo(f"\nSaved to: {result_path}")
+        typer.echo("\nTips:")
+        typer.echo("  - Open in PowerPoint to edit charts, tables, and text")
+        typer.echo("  - Charts extracted by AI contain real data - fully editable!")
+        typer.echo("  - Some complex graphics may be preserved as images")
+        
+    except Exception as e:
+        typer.echo(f"\nError during conversion: {e}")
+        raise typer.Exit(code=1)
+
+
+def _parse_page_range(page_spec: str) -> Optional[List[int]]:
+    """
+    Parse page specification string into list of page numbers.
+    
+    Examples:
+        "1,2,3" -> [1, 2, 3]
+        "1-5" -> [1, 2, 3, 4, 5]
+        "1,3,5-10" -> [1, 3, 5, 6, 7, 8, 9, 10]
+    """
+    pages = []
+    try:
+        parts = page_spec.replace(" ", "").split(",")
+        for part in parts:
+            if "-" in part:
+                start, end = part.split("-", 1)
+                start = int(start)
+                end = int(end)
+                if start > end:
+                    start, end = end, start
+                pages.extend(range(start, end + 1))
+            else:
+                pages.append(int(part))
+        
+        # Remove duplicates and sort
+        pages = sorted(set(pages))
+        return pages if pages else None
+    except (ValueError, AttributeError):
+        return None
+
+
+@app.command()
+def analyze(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file to analyze"),
+    page: int = typer.Option(1, "--page", "-p", help="Page number to analyze (1-indexed)"),
+    output_json: Optional[str] = typer.Option(None, "--output-json", "-o", help="Save analysis results to JSON file")
+):
+    """
+    Analyze a PDF page to detect elements (charts, tables, text, images).
+    
+    This is useful for previewing what elements will be extracted during
+    conversion, and for debugging extraction issues.
+    
+    Examples:
+    
+        # Analyze first page
+        nano-pdf analyze presentation.pdf
+        
+        # Analyze specific page
+        nano-pdf analyze report.pdf --page 5
+        
+        # Save results to JSON
+        nano-pdf analyze deck.pdf -o analysis.json
+    """
+    import json
+    
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+    
+    total_pages = pdf_utils.get_page_count(str(input_path))
+    if page < 1 or page > total_pages:
+        typer.echo(f"Error: Page {page} is out of range. PDF has {total_pages} pages.")
+        raise typer.Exit(code=1)
+    
+    typer.echo(f"\nAnalyzing page {page} of {pdf_path}...")
+    typer.echo("Using AI to detect elements...")
+    
+    try:
+        # Render page
+        page_image = pdf_utils.render_page_as_image(str(input_path), page)
+        
+        # Get comprehensive analysis
+        analysis = ai_utils.extract_slide_content_comprehensive(page_image)
+        
+        if not analysis:
+            typer.echo("\nNo elements detected or analysis failed.")
+            raise typer.Exit(code=1)
+        
+        # Display results
+        typer.echo(f"\n{'='*60}")
+        typer.echo(f"  Analysis Results - Page {page}")
+        typer.echo(f"{'='*60}\n")
+        
+        # Slide properties
+        if "slide_properties" in analysis:
+            props = analysis["slide_properties"]
+            typer.echo("SLIDE PROPERTIES:")
+            typer.echo(f"  Background: {props.get('background_color', 'N/A')}")
+            if props.get('theme_colors'):
+                typer.echo(f"  Theme Colors: {', '.join(props['theme_colors'][:5])}")
+            typer.echo()
+        
+        # Text elements
+        if "text_elements" in analysis and analysis["text_elements"]:
+            typer.echo(f"TEXT ELEMENTS ({len(analysis['text_elements'])}):")
+            for i, elem in enumerate(analysis["text_elements"][:10]):  # Show first 10
+                text_preview = elem.get("text", "")[:50]
+                if len(elem.get("text", "")) > 50:
+                    text_preview += "..."
+                elem_type = elem.get("type", "text")
+                typer.echo(f"  {i+1}. [{elem_type}] \"{text_preview}\"")
+            if len(analysis["text_elements"]) > 10:
+                typer.echo(f"  ... and {len(analysis['text_elements']) - 10} more")
+            typer.echo()
+        
+        # Charts
+        if "charts" in analysis and analysis["charts"]:
+            typer.echo(f"CHARTS ({len(analysis['charts'])}):")
+            for i, chart in enumerate(analysis["charts"]):
+                chart_type = chart.get("type", "unknown")
+                title = chart.get("title", "Untitled")
+                series_count = len(chart.get("series", []))
+                cat_count = len(chart.get("categories", []))
+                typer.echo(f"  {i+1}. {chart_type.upper()} chart: \"{title}\"")
+                typer.echo(f"     - {series_count} data series, {cat_count} categories")
+                if chart.get("series"):
+                    for s in chart["series"][:3]:
+                        vals = s.get("values", [])[:5]
+                        typer.echo(f"     - Series \"{s.get('name', 'unnamed')}\": {vals}{'...' if len(s.get('values', [])) > 5 else ''}")
+            typer.echo()
+        
+        # Tables
+        if "tables" in analysis and analysis["tables"]:
+            typer.echo(f"TABLES ({len(analysis['tables'])}):")
+            for i, table in enumerate(analysis["tables"]):
+                rows = table.get("rows", [])
+                row_count = len(rows)
+                col_count = len(rows[0]) if rows else 0
+                typer.echo(f"  {i+1}. Table: {row_count} rows x {col_count} columns")
+            typer.echo()
+        
+        # Images
+        if "images" in analysis and analysis["images"]:
+            typer.echo(f"IMAGES ({len(analysis['images'])}):")
+            for i, img in enumerate(analysis["images"]):
+                desc = img.get("description", "No description")[:60]
+                img_type = img.get("type", "image")
+                typer.echo(f"  {i+1}. [{img_type}] {desc}")
+            typer.echo()
+        
+        # Shapes
+        if "shapes" in analysis and analysis["shapes"]:
+            typer.echo(f"SHAPES ({len(analysis['shapes'])}):")
+            for i, shape in enumerate(analysis["shapes"][:5]):
+                shape_type = shape.get("type", "shape")
+                fill = shape.get("fill_color", "none")
+                typer.echo(f"  {i+1}. {shape_type} (fill: {fill})")
+            if len(analysis["shapes"]) > 5:
+                typer.echo(f"  ... and {len(analysis['shapes']) - 5} more")
+            typer.echo()
+        
+        # Save to JSON if requested
+        if output_json:
+            with open(output_json, 'w') as f:
+                json.dump(analysis, f, indent=2)
+            typer.echo(f"Analysis saved to: {output_json}")
+        
+    except Exception as e:
+        typer.echo(f"\nError during analysis: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """
-    Show version.
+    Show version information.
     """
-    typer.echo("Nano PDF v0.2.1")
+    typer.echo("\n  Nano PDF Editor v0.3.0")
+    typer.echo("  Powered by Gemini 3 Pro Image (Nano Banana)")
+    typer.echo("\n  Features:")
+    typer.echo("    - Edit PDF slides with natural language")
+    typer.echo("    - Add new slides to existing decks")
+    typer.echo("    - Convert PDF to PowerPoint with editable charts")
+    typer.echo("    - Analyze slide content with AI")
+    typer.echo("\n  https://github.com/gavrielc/Nano-PDF")
+    typer.echo()
+
 
 if __name__ == "__main__":
     app()

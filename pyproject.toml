@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-pdf"
-version = "0.2.1"
-description = "A CLI tool to edit PDF slides using natural language prompts, powered by Gemini 3 Pro Image"
+version = "0.3.0"
+description = "A CLI tool to edit PDF slides and convert to PowerPoint using AI, powered by Gemini 3 Pro Image"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -15,6 +15,9 @@ authors = [
 keywords = [
     "pdf",
     "pdf-editor",
+    "pdf-to-ppt",
+    "pdf-to-powerpoint",
+    "pptx",
     "gemini",
     "ai",
     "computer-vision",
@@ -22,7 +25,9 @@ keywords = [
     "cli",
     "slides",
     "presentation",
-    "ocr"
+    "ocr",
+    "charts",
+    "converter"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -30,6 +35,7 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Topic :: Multimedia :: Graphics",
     "Topic :: Office/Business",
+    "Topic :: Office/Business :: Office Suites",
     "Topic :: Utilities",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -46,7 +52,9 @@ dependencies = [
     "pytesseract",
     "google-genai>=1.52.0",
     "python-dotenv",
-    "Pillow"
+    "Pillow",
+    "python-pptx>=0.6.21",
+    "PyMuPDF>=1.23.0"
 ]
 
 [project.urls]

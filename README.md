@@ -8,15 +8,20 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A CLI tool to edit PDF slides using natural language prompts, powered by Google's **Gemini 3 Pro Image** ("Nano Banana") model.
+A CLI tool to edit PDF slides using natural language prompts and **convert PDFs to editable PowerPoint presentations**, powered by Google's **Gemini 3 Pro Image** ("Nano Banana") model.
 
 ## Features
+
 *   **Natural Language Editing**: "Update the graph to include data from 2025", "Change the chart to a bar graph".
 *   **Add New Slides**: Generate entirely new slides that match your deck's visual style.
+*   **PDF to PowerPoint Conversion**: Convert PDFs to PPTX with editable charts, tables, and text.
+*   **AI-Powered Chart Extraction**: Charts are extracted with their actual data, making them fully editable in PowerPoint.
 *   **Non-Destructive**: Preserves the searchable text layer of your PDF using OCR re-hydration.
-*   **Multi-page & Parallel**: Edit multiple pages in a single command with concurrent processing.
+*   **Multi-page & Parallel**: Edit multiple pages or convert entire decks with concurrent processing.
 
 ## Example
+
+### Edit a PDF
 
 ```bash
 nano-pdf edit linkedin-deck.pdf 1 "Change the tagline in the logo to 'Cringe posts from work colleagues' and update the date"
@@ -32,7 +37,29 @@ nano-pdf edit linkedin-deck.pdf 1 "Change the tagline in the logo to 'Cringe pos
 
 ![Text selection demo](https://raw.githubusercontent.com/gavrielc/Nano-PDF/main/assets/text-selection-demo.png)
 
+### Convert PDF to PowerPoint
+
+```bash
+# Convert entire PDF to editable PowerPoint
+nano-pdf toppt presentation.pdf
+
+# Convert specific pages with AI chart extraction
+nano-pdf toppt report.pdf --pages "1,3,5-10" --extract-charts
+
+# Quick conversion without AI (faster)
+nano-pdf toppt slides.pdf --no-use-ai
+```
+
+The converter extracts:
+- **Editable text** with preserved fonts and styling
+- **Editable charts** with actual data values (bar, line, pie, etc.)
+- **Editable tables** with cell formatting
+- **Images** in their original positions
+- **Shapes** with colors and borders
+
 ## How It Works
+
+### PDF Editing
 
 Nano PDF uses Gemini 3 Pro Image (aka Nano Banana) and PDF manipulation to enable quick edits of PDFs with natural language editing:
 
@@ -43,6 +70,25 @@ Nano PDF uses Gemini 3 Pro Image (aka Nano Banana) and PDF manipulation to enabl
 5. **PDF Stitching**: Replaces original pages with AI-edited versions while preserving document structure
 
 The tool processes multiple pages in parallel for speed, with configurable resolution (4K/2K/1K) to balance quality vs. cost.
+
+### PDF to PowerPoint Conversion
+
+The PDF to PPT converter uses a multi-stage intelligent extraction pipeline:
+
+1. **PDF Parsing**: Uses PyMuPDF to extract raw elements (text blocks, images, vector drawings)
+2. **Element Analysis**: Groups related elements and detects chart/table regions
+3. **AI Extraction**: Uses Gemini to analyze page images and extract:
+   - Chart data (type, categories, series with actual numerical values)
+   - Table structure and content
+   - Text hierarchy and styling
+4. **PowerPoint Generation**: Creates native PowerPoint elements using python-pptx:
+   - Text boxes with matched fonts and colors
+   - Native charts with extracted data (fully editable!)
+   - Tables with proper formatting
+   - Images and shapes
+5. **Fallback**: Complex graphics that can't be parsed are preserved as images
+
+See [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) for detailed technical documentation.
 
 ## Installation
 
@@ -103,7 +149,61 @@ nano-pdf add my_deck.pdf 5 "Summary slide with key takeaways as bullet points"
 
 The new slide will automatically match the visual style of your existing slides and uses document context by default for better relevance.
 
-### Options
+### Convert PDF to PowerPoint
+
+Convert a PDF presentation to an editable PowerPoint file:
+
+```bash
+# Basic conversion (all pages)
+nano-pdf toppt presentation.pdf
+
+# Convert to specific output file
+nano-pdf toppt report.pdf -o my_presentation.pptx
+
+# Convert specific pages
+nano-pdf toppt deck.pdf --pages "1,3,5-10"
+
+# Full conversion with all AI features
+nano-pdf toppt slides.pdf \
+  --extract-charts \
+  --extract-tables \
+  --resolution 4K
+
+# Fast conversion without AI (basic extraction)
+nano-pdf toppt quick.pdf --no-use-ai
+```
+
+#### toppt Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output, -o` | `<filename>.pptx` | Output file path |
+| `--pages, -p` | All pages | Pages to convert (e.g., "1,3,5-10") |
+| `--extract-charts/--no-extract-charts` | Enabled | Extract charts as editable with data |
+| `--extract-tables/--no-extract-tables` | Enabled | Extract tables as editable |
+| `--preserve-fonts/--no-preserve-fonts` | Enabled | Match original fonts |
+| `--use-ai/--no-use-ai` | Enabled | Use AI for element extraction |
+| `--resolution, -r` | 4K | AI analysis resolution (4K/2K/1K) |
+| `--fallback-to-image/--no-fallback-to-image` | Enabled | Use image if extraction fails |
+| `--parallel/--no-parallel` | Enabled | Process pages in parallel |
+| `--max-workers` | 5 | Maximum parallel workers (1-10) |
+
+### Analyze a Page
+
+Preview what elements will be extracted:
+
+```bash
+# Analyze first page
+nano-pdf analyze presentation.pdf
+
+# Analyze specific page
+nano-pdf analyze report.pdf --page 5
+
+# Save analysis to JSON
+nano-pdf analyze deck.pdf -o analysis.json
+```
+
+### Edit Options
 *   `--use-context` / `--no-use-context`: Include the full text of the PDF as context for the model. Disabled by default for `edit`, **enabled by default for `add`**. Use `--no-use-context` to disable.
 *   `--style-refs "1,5"`: Manually specify which pages to use as style references.
 *   `--output "new.pdf"`: Specify the output filename.
@@ -112,7 +212,9 @@ The new slide will automatically match the visual style of your existing slides 
 
 ## Examples
 
-### Fixing Presentation Errors
+### PDF Editing Examples
+
+#### Fixing Presentation Errors
 ```bash
 # Fix typos across multiple slides
 nano-pdf edit pitch_deck.pdf \
@@ -120,44 +222,47 @@ nano-pdf edit pitch_deck.pdf \
   7 "Change 'Q4 2024' to 'Q1 2025'"
 ```
 
-### Visual Design Changes
+#### Visual Design Changes
 ```bash
 # Update branding and colors
 nano-pdf edit slides.pdf 1 "Make the header background blue and text white" \
   --style-refs "2,3" --output branded_slides.pdf
 ```
 
-### Content Updates
+#### Content Updates
 ```bash
 # Update financial data
 nano-pdf edit report.pdf 12 "Update the revenue chart to show Q3 at $2.5M instead of $2.1M"
 ```
 
-### Batch Processing with Context
+### PDF to PowerPoint Examples
+
+#### Convert a Financial Report
 ```bash
-# Use full document context for consistency
-nano-pdf edit presentation.pdf \
-  5 "Update the chart colors to match the theme" \
-  8 "Add the company logo in the bottom right" \
-  --use-context
+# Convert with chart extraction for editable charts
+nano-pdf toppt quarterly_report.pdf \
+  --extract-charts \
+  --output editable_report.pptx
 ```
 
-### Adding New Slides
+#### Convert Selected Slides
 ```bash
-# Add a new agenda slide at the beginning
-nano-pdf add quarterly_report.pdf 0 "Agenda slide with: Overview, Financial Results, Q4 Outlook"
+# Only convert key slides
+nano-pdf toppt full_deck.pdf \
+  --pages "1,5,10-15,20" \
+  -o key_slides.pptx
 ```
 
-### Using Google Search
+#### Fast Batch Conversion
 ```bash
-# Google Search is enabled by default - the model can look up current information
-nano-pdf edit deck.pdf 5 "Update the market share data to latest figures"
-
-# Disable Google Search if you want the model to only use provided context
-nano-pdf add deck.pdf 3 "Add a summary slide" --disable-google-search
+# Quick conversion without AI (faster, less accurate)
+for f in *.pdf; do
+  nano-pdf toppt "$f" --no-use-ai
+done
 ```
 
 ## Requirements
+
 *   Python 3.10+
 *   `poppler` (for PDF rendering)
 *   `tesseract` (for OCR)
@@ -204,6 +309,14 @@ The tool uses Tesseract OCR to restore searchable text. For best results, ensure
 ### Pages are processing slowly
 - Use `--resolution "2K"` or `--resolution "1K"` for faster processing
 
+### Chart data not extracted correctly
+The AI-powered chart extraction works best with:
+- Clear, well-labeled charts
+- Standard chart types (bar, column, line, pie)
+- Visible axis labels and data values
+
+For complex or stylized charts, they may be preserved as images instead.
+
 ## Running from Source
 
 ```bash
@@ -219,7 +332,14 @@ cp .env.example .env
 
 # Run the tool
 uv run nano-pdf edit my_deck.pdf 2 "Your edit here"
+uv run nano-pdf toppt my_deck.pdf -o converted.pptx
 ```
+
+## Documentation
+
+- [Architecture Documentation](doc/ARCHITECTURE.md) - Technical details and design decisions
+- [API Reference](doc/API.md) - Programmatic usage
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ## License
 MIT
