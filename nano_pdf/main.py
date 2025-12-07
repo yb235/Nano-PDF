@@ -1,7 +1,7 @@
 import typer
 from typing import List, Optional
 from pathlib import Path
-from nano_pdf import pdf_utils, ai_utils
+from nano_pdf import pdf_utils, ai_utils, ppt_converter
 import concurrent.futures
 import tempfile
 
@@ -270,6 +270,69 @@ def add(
             Path(temp_pdf).unlink()
 
     typer.echo(f"Done! New slide added after page {after_page}. Saved to {output}")
+
+@app.command()
+def convert(
+    pdf_path: str = typer.Argument(..., help="Path to the PDF file"),
+    output: Optional[str] = typer.Option(None, help="Output path for the PPTX file. Defaults to '<filename>.pptx'"),
+    use_context: bool = typer.Option(True, help="Include full PDF text as context (enabled by default)"),
+    resolution: str = typer.Option("4K", help="Image resolution: '4K', '2K', '1K' (higher = better quality but slower)"),
+    disable_google_search: bool = typer.Option(False, help="Disable Google Search (enabled by default)")
+):
+    """
+    Convert a PDF to PowerPoint presentation with exact formatting preservation.
+    Preserves fonts, styles, colors, and makes charts interactive.
+    
+    Usage: nano-pdf convert deck.pdf --output presentation.pptx
+    """
+    # Check system dependencies first
+    try:
+        pdf_utils.check_system_dependencies()
+    except RuntimeError as e:
+        typer.echo(f"Error: {e}")
+        raise typer.Exit(code=1)
+
+    input_path = Path(pdf_path)
+    if not input_path.exists():
+        typer.echo(f"Error: File {pdf_path} not found.")
+        raise typer.Exit(code=1)
+
+    if not output:
+        output = f"{input_path.stem}.pptx"
+    
+    typer.echo(f"Converting {pdf_path} to PowerPoint presentation...")
+    typer.echo(f"Output will be saved to: {output}")
+    
+    # Extract text context
+    full_text = ""
+    if use_context:
+        typer.echo("Extracting text context from PDF...")
+        full_text = pdf_utils.extract_full_text(str(input_path))
+        if not full_text:
+            typer.echo("Warning: Could not extract text from PDF. Context will be limited.")
+    else:
+        typer.echo("Skipping text context (use --use-context to enable)...")
+    
+    # Convert PDF to PPT
+    try:
+        output_path = ppt_converter.convert_pdf_to_ppt(
+            pdf_path=str(input_path),
+            output_ppt_path=output,
+            full_text_context=full_text,
+            resolution=resolution,
+            enable_search=not disable_google_search
+        )
+        typer.echo(f"\n✓ Conversion complete! PowerPoint saved to: {output_path}")
+        typer.echo("\nThe presentation includes:")
+        typer.echo("  • Exact font preservation")
+        typer.echo("  • Style and color matching")
+        typer.echo("  • Interactive charts (extracted from PDF visualizations)")
+        typer.echo("  • Preserved layouts and positioning")
+    except Exception as e:
+        typer.echo(f"Error converting PDF to PPT: {e}")
+        import traceback
+        typer.echo(traceback.format_exc())
+        raise typer.Exit(code=1)
 
 @app.command()
 def version():
