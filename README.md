@@ -32,6 +32,19 @@ nano-pdf edit linkedin-deck.pdf 1 "Change the tagline in the logo to 'Cringe pos
 
 ![Text selection demo](https://raw.githubusercontent.com/gavrielc/Nano-PDF/main/assets/text-selection-demo.png)
 
+## 📚 Documentation
+
+**New users?** Start with our comprehensive documentation in the [`docs/`](docs/) folder:
+
+- **[Installation Guide](docs/INSTALLATION.md)** - Detailed setup for all platforms
+- **[User Guide](docs/USER_GUIDE.md)** - Complete beginner-friendly tutorial
+- **[Examples](docs/EXAMPLES.md)** - Real-world use cases and workflows
+- **[CLI Reference](docs/API_REFERENCE.md)** - Complete command reference
+- **[FAQ](docs/FAQ.md)** - Frequently asked questions
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and internals
+- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and extending
+
 ## How It Works
 
 Nano PDF uses Gemini 3 Pro Image (aka Nano Banana) and PDF manipulation to enable quick edits of PDFs with natural language editing:
