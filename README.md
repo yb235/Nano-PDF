@@ -13,6 +13,7 @@ A CLI tool to edit PDF slides using natural language prompts, powered by Google'
 ## Features
 *   **Natural Language Editing**: "Update the graph to include data from 2025", "Change the chart to a bar graph".
 *   **Add New Slides**: Generate entirely new slides that match your deck's visual style.
+*   **PDF → PPTX Conversion**: Convert entire decks into editable PowerPoint files with Nano Banana chart reconstruction.
 *   **Non-Destructive**: Preserves the searchable text layer of your PDF using OCR re-hydration.
 *   **Multi-page & Parallel**: Edit multiple pages in a single command with concurrent processing.
 
@@ -161,6 +162,33 @@ nano-pdf edit presentation.pdf \
 nano-pdf add quarterly_report.pdf 0 "Agenda slide with: Overview, Financial Results, Q4 Outlook"
 ```
 
+### Convert to PowerPoint
+Rebuild a PDF deck as an editable PPTX. Text boxes, fonts, and images are mapped into native PowerPoint elements, while Nano Banana extracts live chart data so graphs stay editable.
+
+```bash
+# Convert every page to PPTX with AI chart extraction
+nano-pdf convert investor_deck.pdf --output investor_deck.pptx
+
+# Convert a subset of pages with a photographic background
+nano-pdf convert roadmap.pdf \
+  --pages "1-5" \
+  --background-strategy image \
+  --max-ai-charts 4
+
+# Skip AI if you're offline (charts become static)
+nano-pdf convert design.pdf --skip-ai-charts
+```
+
+Key options:
+
+* `--pages "1,3-5"`: Choose specific pages.
+* `--max-ai-charts 4`: Tell Nano Banana how many graphs to recreate per slide.
+* `--background-strategy [average_color|image|none]`: Control the slide background layer.
+* `--skip-ai-charts`: Use only deterministic extraction (charts become pictures).
+* `--embed-page-thumbnail`: Add a hidden page snapshot for art-direction QA.
+
+> **Tip:** Chart reconstruction uses Gemini 3 Pro Image. If `GEMINI_API_KEY` is missing, the command gracefully falls back to static chart screenshots.
+
 ### Using Google Search
 ```bash
 # Google Search is enabled by default - the model can look up current information
@@ -172,8 +200,10 @@ nano-pdf add deck.pdf 3 "Add a summary slide" --disable-google-search
 
 ## Requirements
 *   Python 3.10+
-*   `poppler` (for PDF rendering)
+*   `poppler` (for PDF rendering / pdftotext)
 *   `tesseract` (for OCR)
+*   `PyMuPDF` (for vector/text extraction used by `convert`)
+*   `python-pptx` (for PPTX assembly)
 
 ### System Dependencies
 
@@ -210,6 +240,12 @@ Gemini 3 Pro Image requires a paid API tier. Visit [Google AI Studio](https://ai
 
 ### Generated images don't match the style
 Try using `--style-refs` to specify reference pages that have the desired visual style. The model will analyze these pages to better match fonts, colors, and layout.
+
+### "Chart extraction failed" warning during `convert`
+Ensure `GEMINI_API_KEY` is set and billing is enabled. Without it, the converter still succeeds but charts become static images.
+
+### Slides look washed out after `convert`
+Try `--background-strategy image` to embed the original slide artwork as a base layer, or `--embed-page-thumbnail` for a one-click QA overlay.
 
 ### Text layer is missing or incorrect after editing
 The tool uses Tesseract OCR to restore searchable text. For best results, ensure your generated images are high resolution (`--resolution "4K"`). Note that OCR may not be perfect for stylized fonts or small text.
